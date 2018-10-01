@@ -426,8 +426,26 @@ public final class ValidateVariants extends VariantWalker {
                 vc.validateChromosomeCounts();
                 break;
             case GNARLY:
+                validateGnarlyAnnotations(vc);
                 validateGnarlyGenotypes(vc);
                 break;
+        }
+    }
+
+    private void validateGnarlyAnnotations(final VariantContext vc) {
+        checkForAnnotation(vc, GATKVCFConstants.FISHER_STRAND_KEY);
+        checkForAnnotation(vc, VCFConstants.DEPTH_KEY);
+        checkForAnnotation(vc, VCFConstants.ALLELE_COUNT_KEY);
+        checkForAnnotation(vc, VCFConstants.ALLELE_NUMBER_KEY);
+        checkForAnnotation(vc, GATKVCFConstants.STRAND_ODDS_RATIO_KEY);
+        checkForAnnotation(vc, VCFConstants.RMS_MAPPING_QUALITY_KEY);
+        //checkForAnnotation(vc, GATKVCFConstants.EXCESS_HET_KEY);
+    }
+
+    private void checkForAnnotation(final VariantContext vc, final String annotationKey) {
+        if (!vc.hasAttribute(annotationKey)) {
+            final UserException e = new UserException.BadInput("Variant at " + vc.getContig() + ":" + vc.getStart() + " is missing " + annotationKey);
+            throwOrWarn(e);
         }
     }
 
@@ -454,8 +472,10 @@ public final class ValidateVariants extends VariantWalker {
      */
     private void validateRequiredGTAttributes(final Genotype g, final VariantContext vc) {
         if (!g.hasAD()) {
-            final UserException e = new UserException.BadInput("Genotype for sample " + g.getSampleName() + " is missing AD at " + vc.getContig() + ":" + vc.getStart() + " : " + g);
-            throwOrWarn(e);
+            if (g.countAllele(Allele.SPAN_DEL) + g.countAllele(vc.getReference()) < 2) {
+                final UserException e = new UserException.BadInput("Genotype for sample " + g.getSampleName() + " is missing AD at " + vc.getContig() + ":" + vc.getStart() + " : " + g);
+                throwOrWarn(e);
+            }
         }
     }
 
