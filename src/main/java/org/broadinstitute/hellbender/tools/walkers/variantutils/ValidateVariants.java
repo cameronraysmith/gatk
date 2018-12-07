@@ -439,7 +439,17 @@ public final class ValidateVariants extends VariantWalker {
         checkForAnnotation(vc, VCFConstants.ALLELE_NUMBER_KEY);
         checkForAnnotation(vc, GATKVCFConstants.STRAND_ODDS_RATIO_KEY);
         checkForAnnotation(vc, VCFConstants.RMS_MAPPING_QUALITY_KEY);
-        //checkForAnnotation(vc, GATKVCFConstants.EXCESS_HET_KEY);
+        checkForAnnotation(vc, GATKVCFConstants.EXCESS_HET_KEY);
+        /*checkForAnnotation(vc, GATKVCFConstants.VQS_LOD_KEY);
+        final double vqslod = vc.getAttributeAsDouble(GATKVCFConstants.VQS_LOD_KEY, 0.0);
+        if (Double.isInfinite(vqslod)) {
+            final UserException e = new UserException.BadInput("Variant at " + vc.getContig() + ":" + vc.getStart() + " has infinite VQSLOD: " + vqslod);
+            throwOrWarn(e);
+        }
+        if (Double.isNaN(vqslod)) {
+            final UserException e = new UserException.BadInput("Variant at " + vc.getContig() + ":" + vc.getStart() + " has NaN VQSLOD: " + vqslod);
+            throwOrWarn(e);
+        }*/
     }
 
     private void checkForAnnotation(final VariantContext vc, final String annotationKey) {
