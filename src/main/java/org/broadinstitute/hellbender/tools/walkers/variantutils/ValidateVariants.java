@@ -137,8 +137,12 @@ public final class ValidateVariants extends VariantWalker {
         /**
          * Check that each genotype has a GT and AD and (for sites with no more than 6 alt alleles) PLs and GQ
          */
-        GNARLY;
-        ;
+        GNARLY,
+
+        /**
+         * Check that each variant has critical VQSR annotations, including rank sums if heterozygous genotypes are present
+         */
+        VQSR;
 
         /**
          * Unmodifiable set of concrete validation types.
