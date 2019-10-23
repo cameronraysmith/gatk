@@ -140,9 +140,14 @@ public final class ValidateVariants extends VariantWalker {
         GNARLY,
 
         /**
-         * Check that each variant has critical VQSR annotations, including rank sums if heterozygous genotypes are present
+         * Check that each variant has required VQSR annotations, including rank sums if heterozygous genotypes are present
          */
-        VQSR;
+        VQSR,
+
+        /**
+         * Check that allele-specific annotations have the right number of values based on the listed ALTs
+         */
+        AS_ANNOTATIONS;
 
         /**
          * Unmodifiable set of concrete validation types.
@@ -433,6 +438,10 @@ public final class ValidateVariants extends VariantWalker {
                 validateGnarlyAnnotations(vc);
                 validateGnarlyGenotypes(vc);
                 break;
+            case VQSR:
+                validateRequiredVQSRAnnotations(vc);
+            case AS_ANNOTATIONS:
+                validateAlleleSpecificAnnotations(vc);
         }
     }
 
