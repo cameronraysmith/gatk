@@ -14,6 +14,8 @@ import org.broadinstitute.barclay.argparser.ArgumentCollection;
 import org.broadinstitute.barclay.argparser.CommandLineProgramProperties;
 import org.broadinstitute.barclay.help.DocumentedFeature;
 import org.broadinstitute.hellbender.cmdline.argumentcollections.DbsnpArgumentCollection;
+import org.broadinstitute.hellbender.utils.logging.OneShotLogger;
+import org.broadinstitute.hellbender.utils.variant.GATKVariantContextUtils;
 import picard.cmdline.programgroups.VariantEvaluationProgramGroup;
 import org.broadinstitute.hellbender.engine.FeatureContext;
 import org.broadinstitute.hellbender.engine.ReadsContext;
@@ -22,6 +24,7 @@ import org.broadinstitute.hellbender.engine.VariantWalker;
 import org.broadinstitute.hellbender.exceptions.UserException;
 import org.broadinstitute.hellbender.utils.*;
 import org.broadinstitute.hellbender.utils.variant.GATKVCFConstants;
+import shaded.cloud_nio.com.google.errorprone.annotations.Var;
 
 import java.util.*;
 
@@ -101,6 +104,7 @@ import java.util.*;
 @DocumentedFeature
 public final class ValidateVariants extends VariantWalker {
     static final Logger logger = LogManager.getLogger(ValidateVariants.class);
+    static final OneShotLogger oneShotLogger = new OneShotLogger(ValidateVariants.class);
 
     public static final String GVCF_VALIDATE = "validate-GVCF";
     public static final String DO_NOT_VALIDATE_FILTERED_RECORDS = "do-not-validate-filtered-records";
@@ -221,6 +225,9 @@ public final class ValidateVariants extends VariantWalker {
             doc = "Maximum number of alt alleles for which PLs should be reported; used in GNARLY validation mode",
             optional = true)
     int MAX_ALT_ALLELES = 5;
+
+    private static final List<String> requiredVQSRAnnotationKeys = Arrays.asList("MQ", "QD", "MQRankSum", "ReadPosRankSum", "FS", "SOR", "DP");  //DP is not required for exomes, but should appear anyway
+    private static final List<String> requiredAlleleSpecificVQSRAnnotationKeys = Arrays.asList("AS_MQ", "AS_QD", "AS_MQRankSum", "AS_ReadPosRankSum", "AS_FS", "AS_SOR", "DP");  //DP is not required for exomes, but should appear anyway
 
     @Override
     public void onTraversalStart() {
@@ -440,6 +447,7 @@ public final class ValidateVariants extends VariantWalker {
                 break;
             case VQSR:
                 validateRequiredVQSRAnnotations(vc);
+                break;
             case AS_ANNOTATIONS:
                 validateAlleleSpecificAnnotations(vc);
         }
@@ -510,6 +518,33 @@ public final class ValidateVariants extends VariantWalker {
         if (!g.hasGQ()) {
             final UserException e = new UserException.BadInput("Genotype for sample " + g.getSampleName() + " is missing GQ at " + vc.getContig() + ":" + vc.getStart() + " : " + g);
             throwOrWarn(e);
+        }
+    }
+
+    private void validateAlleleSpecificAnnotations(final VariantContext vc) {
+        final UserException e = GATKVariantContextUtils.assertAlleleSpecificAnnotationsHaveCorrectLength(vc);
+        if (e != null) {
+            throwOrWarn(e);
+        }
+    }
+
+    private void validateRequiredVQSRAnnotations(final VariantContext vc) {
+        boolean hasHetCall = false;
+        if (vc.hasGenotypes()) {
+            for (final Genotype g : vc.getGenotypes()) {
+                if (g.isHet() && !g.isHetNonRef()) {
+                    hasHetCall = true;
+                    break;
+                }
+            }
+        } else {
+            oneShotLogger.warn("No genotypes are present for variant -- will not validate the existence of RankSum annotations");
+        }
+        for (final String requiredAnnotation : requiredVQSRAnnotationKeys) {
+            if (requiredAnnotation.contains("RankSum") && !hasHetCall) {
+                continue;
+            }
+            checkForAnnotation(vc, requiredAnnotation);
         }
     }
 
