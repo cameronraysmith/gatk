@@ -341,7 +341,11 @@ public final class GATKVariantContextUtils {
     }
 
     public static UserException assertAlleleSpecificAnnotationLengthsCorrect(final VariantContext actual, final String annotation, final VCFHeaderLineCount expectedCount) {
-        return assertAlleleSpecificAnnotationLengthsCorrect(actual, annotation, expectedCount, true);
+        return assertAlleleSpecificAnnotationLengthsCorrect(actual, annotation, expectedCount, true, false);
+    }
+
+    public static UserException assertAlleleSpecificAnnotationLengthsCorrect(final VariantContext actual, final String annotation, final VCFHeaderLineCount expectedCount, final boolean isRawFormat) {
+        return assertAlleleSpecificAnnotationLengthsCorrect(actual, annotation, expectedCount, isRawFormat, false);
     }
 
     /**
@@ -352,16 +356,24 @@ public final class GATKVariantContextUtils {
      * @param isRawFormat   true if the AS annotation is in the "raw" format, which uses the pipe delimiter
      * @return null if length is correct, else UserException
      */
-    public static UserException assertAlleleSpecificAnnotationLengthsCorrect(final VariantContext vc, final String annotation, final VCFHeaderLineCount expectedCount, final boolean isRawFormat) {
+    public static UserException assertAlleleSpecificAnnotationLengthsCorrect(final VariantContext vc, final String annotation, final VCFHeaderLineCount expectedCount, final boolean isRawFormat, final boolean failIfMissing) {
         final List<Allele> alleles = vc.getAlleles();
         final String regex = isRawFormat ? AnnotationUtils.ALLELE_SPECIFIC_SPLIT_REGEX : AnnotationUtils.ALLELE_SPECIFIC_REDUCED_DELIM;
-        final String[] actualAnnotation = vc.getAttributeAsString(annotation, "").split(regex,-1);
-        final int expectedLength =  (expectedCount == VCFHeaderLineCount.R ? alleles.size() : alleles.size() - 1);
-        if ( actualAnnotation.length != expectedLength ) {
-            return new UserException.BadInput("Annotation " + annotation + " at " + vc.getContig() + ":" + vc.getStart()
-                    + " expected to have length " + expectedLength + " but found length " + actualAnnotation.length);
+        if (vc.hasAttribute(annotation)) {
+            final String[] actualAnnotation = vc.getAttributeAsString(annotation, "").split(regex, -1);
+            final int expectedLength = (expectedCount == VCFHeaderLineCount.R ? alleles.size() : alleles.size() - 1);
+            if (actualAnnotation.length != expectedLength) {
+                return new UserException.BadInput("Annotation " + annotation + " at " + vc.getContig() + ":" + vc.getStart()
+                        + " expected to have length " + expectedLength + " but found length " + actualAnnotation.length);
+            }
+            return null;
+        } else {
+            if (failIfMissing) {
+                return new UserException.BadInput("Annotation " + annotation + " at " + vc.getContig() + ":" + vc.getStart()
+                        + " is missing.");
+            }
+            return null;
         }
-        return null;
     }
 
     public enum GenotypeMergeType {
