@@ -113,6 +113,7 @@ public final class GnarlyGenotyperEngine {
         final double sitePrior = isIndel ? HomoSapiensConstants.INDEL_HETEROZYGOSITY : HomoSapiensConstants.SNP_HETEROZYGOSITY;
         if((isIndel && QUALapprox < INDEL_QUAL_THRESHOLD) || (!isIndel && QUALapprox < SNP_QUAL_THRESHOLD)) {
             siteFailsQual = true;
+            vcfBuilder.filter(GATKVCFConstants.LOW_QUAL_FILTER_NAME);
         }
 
         //Because AS_StrandBias annotations both use and return the raw key
@@ -142,7 +143,8 @@ public final class GnarlyGenotyperEngine {
 
         final int variantDP = variant.getAttributeAsInt(GATKVCFConstants.VARIANT_DEPTH_KEY, 0);
         final double QD = QUALapprox / (double)variantDP;
-        vcfBuilder.attribute(GATKVCFConstants.QUAL_BY_DEPTH_KEY, QD).log10PError(QUALapprox/-10.0+Math.log10(sitePrior));
+        final double log10Confidence = Math.min(QUALapprox/-10.0-Math.log10(sitePrior), 0);  //low quality sites won't survive the heterozygosity prior, so set to zero if (Phred-scaled) QUAL goes negative
+        vcfBuilder.attribute(GATKVCFConstants.QUAL_BY_DEPTH_KEY, QD).log10PError(log10Confidence);
         if (!keepAllSites) {
             vcfBuilder.rmAttribute(GATKVCFConstants.RAW_QUAL_APPROX_KEY);
         }
@@ -355,7 +357,8 @@ public final class GnarlyGenotyperEngine {
             mergedGenotypes.add(calledGT);
 
             if (g.hasAnyAttribute(GATKVCFConstants.STRAND_BIAS_BY_SAMPLE_KEY)) {
-                final List<Integer> sbbsList = Arrays.asList(StringUtils.split(g.getAnyAttribute(GATKVCFConstants.STRAND_BIAS_BY_SAMPLE_KEY).toString(), ",")).stream().mapToInt(Integer::parseInt).boxed().collect(Collectors.toList());
+                final List<Integer> sbbsList = AnnotationUtils.decodeAnyASList(g.getAnyAttribute(GATKVCFConstants.STRAND_BIAS_BY_SAMPLE_KEY).toString(), AnnotationUtils.ALLELE_SPECIFIC_REDUCED_DELIM)
+                        .stream().mapToInt(Integer::parseInt).boxed().collect(Collectors.toList());
                 MathUtils.addToArrayInPlace(SBsum, Ints.toArray(sbbsList));
             }
 
