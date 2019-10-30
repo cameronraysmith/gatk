@@ -8,7 +8,6 @@ import htsjdk.variant.variantcontext.VariantContext;
 import htsjdk.variant.vcf.VCFConstants;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.bdgenomics.formats.avro.Variant;
 import org.broadinstitute.barclay.argparser.Argument;
 import org.broadinstitute.barclay.argparser.ArgumentCollection;
 import org.broadinstitute.barclay.argparser.CommandLineProgramProperties;
@@ -24,7 +23,6 @@ import org.broadinstitute.hellbender.engine.VariantWalker;
 import org.broadinstitute.hellbender.exceptions.UserException;
 import org.broadinstitute.hellbender.utils.*;
 import org.broadinstitute.hellbender.utils.variant.GATKVCFConstants;
-import shaded.cloud_nio.com.google.errorprone.annotations.Var;
 
 import java.util.*;
 
@@ -160,6 +158,9 @@ public final class ValidateVariants extends VariantWalker {
          */
         public static final Set<ValidationType> CONCRETE_TYPES;
 
+
+        public static final Set<ValidationType> DEFAULT_TYPES;
+
         static {
             final Set<ValidationType> cts = new LinkedHashSet<>(values().length - 1);
             for (final ValidationType v : values()) {
@@ -168,7 +169,21 @@ public final class ValidateVariants extends VariantWalker {
             }
             CONCRETE_TYPES = Collections.unmodifiableSet(cts);
         }
+
+        static {
+            DEFAULT_TYPES = new LinkedHashSet<>(CONCRETE_TYPES);
+            DEFAULT_TYPES.remove(ValidationType.GNARLY);
+            DEFAULT_TYPES.remove(ValidationType.VQSR);
+            DEFAULT_TYPES.remove(ValidationType.AS_ANNOTATIONS);
+        }
     }
+
+    /**
+     * Contains final set of validation to apply.
+     */
+    boolean[] validationsToPerform;
+
+    ValidationType currentType = null;
 
     @ArgumentCollection
     DbsnpArgumentCollection dbsnp = new DbsnpArgumentCollection();
@@ -178,6 +193,12 @@ public final class ValidateVariants extends VariantWalker {
             doc = "which validation type to exclude from a full strict validation",
             optional = true)
     List<ValidationType> excludeTypes = new ArrayList<>();
+
+    @Argument(fullName = "validation-type-to-include",
+            shortName = "optional-type",
+            doc = "which optional validation type to include in validation",
+            optional = true)
+    List<ValidationType> includeTypes = new ArrayList<>();
 
     /**
      * By default, even filtered records are validated.
@@ -208,11 +229,6 @@ public final class ValidateVariants extends VariantWalker {
             mutex = DO_NOT_VALIDATE_FILTERED_RECORDS)
     Boolean VALIDATE_GVCF = false;
 
-    /**
-     * Contains final set of validation to apply.
-     */
-    private Collection<ValidationType> validationTypes;
-
     private GenomeLocSortedSet genomeLocSortedSet;
 
     // information to keep track of when validating a GVCF
@@ -239,15 +255,16 @@ public final class ValidateVariants extends VariantWalker {
 
             genomeLocSortedSet = new GenomeLocSortedSet(new GenomeLocParser(seqDictionary));
         }
-        validationTypes = calculateValidationTypesToApply(excludeTypes);
+        validationsToPerform = calculateValidationTypesToApply(excludeTypes);
+
 
         //warn user if certain requested validations cannot be done due to lack of arguments
-        if(dbsnp.dbsnp == null && (validationTypes.contains(ValidationType.ALL) || validationTypes.contains(ValidationType.IDS)))
+        if(dbsnp.dbsnp == null && (validationsToPerform[ValidationType.ALL.ordinal()] || validationsToPerform[ValidationType.IDS.ordinal()]))
         {
             logger.warn("IDS validation cannot be done because no DBSNP file was provided");
             logger.warn("Other possible validations will still be performed");
         }
-        if(!hasReference() && (validationTypes.contains(ValidationType.ALL) || validationTypes.contains(ValidationType.REF)))
+        if(!hasReference() && (validationsToPerform[ValidationType.ALL.ordinal()] || validationsToPerform[ValidationType.REF.ordinal()]))
         {
             logger.warn("REF validation cannot be done because no reference file was provided");
             logger.warn("Other possible validations will still be performed");
@@ -288,12 +305,10 @@ public final class ValidateVariants extends VariantWalker {
             validateGVCFVariant(vc);
         }
 
-        for (final ValidationType t : validationTypes) {
-            try{
-                applyValidationType(vc, reportedRefAllele, observedRefAllele, rsIDs, t);
-            } catch (TribbleException e) {
-                throwOrWarn(new UserException.FailsStrictValidation(drivingVariantFile, t, e.getMessage()));
-            }
+        try{
+            applyValidationType(vc, reportedRefAllele, observedRefAllele, rsIDs);
+        } catch (TribbleException e) {
+            throwOrWarn(new UserException.FailsStrictValidation(drivingVariantFile, currentType, e.getMessage()));
         }
     }
 
@@ -339,18 +354,16 @@ public final class ValidateVariants extends VariantWalker {
      *
      * @return the final set of type to validate. May be empty.
      */
-    private Collection<ValidationType> calculateValidationTypesToApply(final List<ValidationType> excludeTypes) {
+    private boolean[] calculateValidationTypesToApply(final List<ValidationType> excludeTypes) {
 
         //creates local, temp list so that original list provided by user doesn't get modified
         List<ValidationType> excludeTypesTemp = new ArrayList<>(excludeTypes);
+        Set<ValidationType> includeTypes;
         if (VALIDATE_GVCF && !excludeTypesTemp.contains(ValidationType.ALLELES)) {
             // Note: in a future version allele validation might be OK for GVCFs, if that happens
             // this will be more complicated.
             logger.warn("GVCF format is currently incompatible with allele validation. Not validating Alleles.");
             excludeTypesTemp.add(ValidationType.ALLELES);
-        }
-        if (excludeTypesTemp.isEmpty()) {
-            return Collections.singleton(ValidationType.ALL);
         }
         final Set<ValidationType> excludeTypeSet = new LinkedHashSet<>(excludeTypesTemp);
         if (excludeTypesTemp.size() != excludeTypeSet.size()) {
@@ -360,15 +373,32 @@ public final class ValidateVariants extends VariantWalker {
             if (excludeTypeSet.size() > 1) {
                 logger.warn("found ALL in the --validation-type-to-exclude list together with other concrete type exclusions that are redundant");
             }
-            return Collections.emptyList();
+            final boolean[] allFalse = new boolean[ValidationType.CONCRETE_TYPES.size()];
+            for (ValidationType t : ValidationType.CONCRETE_TYPES) {
+                allFalse[t.ordinal()] = false;
+            }
+            return allFalse;
         } else {
-            final Set<ValidationType> result = new LinkedHashSet<>(ValidationType.CONCRETE_TYPES);
+            final Set<ValidationType> result = new LinkedHashSet<>(ValidationType.DEFAULT_TYPES);
             result.removeAll(excludeTypeSet);
             if (result.contains(ValidationType.REF) && !hasReference()) {
                 throw new UserException.MissingReference("Validation type " + ValidationType.REF.name() + " was selected but no reference was provided.");
             }
-            return result;
+            includeTypes = result;
         }
+        includeTypes.addAll(this.includeTypes);
+        if (includeTypes.contains(ValidationType.ALL)) {
+            final boolean[] allTrues = new boolean[ValidationType.CONCRETE_TYPES.size()];
+            for (ValidationType t : ValidationType.CONCRETE_TYPES) {
+                allTrues[t.ordinal()] = true;
+            }
+            return allTrues;
+        }
+        final boolean[] returnArray = new boolean[ValidationType.CONCRETE_TYPES.size()];
+        for (ValidationType t : includeTypes) {
+            returnArray[t.ordinal()] = true;
+        }
+        return returnArray;
     }
 
     private void validateVariantsOrder(final VariantContext vc) {
@@ -397,60 +427,40 @@ public final class ValidateVariants extends VariantWalker {
         }
     }
 
-    private void applyValidationType(VariantContext vc, Allele reportedRefAllele, Allele observedRefAllele, Set<String> rsIDs, ValidationType t) {
+    private void applyValidationType(VariantContext vc, Allele reportedRefAllele, Allele observedRefAllele, Set<String> rsIDs) {
         // Note: VariantContext.validateRSIDs blows up on an empty list (but works fine with null).
         // The workaround is to not pass an empty list.
-        switch( t ) {
-            case ALL:
-                if(hasReference())
-                {
-                    if(!rsIDs.isEmpty())
-                    {
-                        vc.extraStrictValidation(reportedRefAllele, observedRefAllele, rsIDs);
-                    }
-                    else{
-                        vc.validateReferenceBases(reportedRefAllele, observedRefAllele);
-                        vc.validateAlternateAlleles();
-                        vc.validateChromosomeCounts();
-                    }
-                }
-                else{
-                    if (rsIDs.isEmpty())
-                    {
-                        vc.validateAlternateAlleles();
-                        vc.validateChromosomeCounts();
-                    }
-                    else{
-                        vc.validateAlternateAlleles();
-                        vc.validateChromosomeCounts();
-                        vc.validateRSIDs(rsIDs);
-                    }
-                }
-                break;
-            case REF:
-                vc.validateReferenceBases(reportedRefAllele, observedRefAllele);
-                break;
-            case IDS:
-                if (!rsIDs.isEmpty()) {
-                    vc.validateRSIDs(rsIDs);
-                }
-                break;
-            case ALLELES:
-                vc.validateAlternateAlleles();
-                break;
-            case CHR_COUNTS:
-                vc.validateChromosomeCounts();
-                break;
-            case GNARLY:
-                validateGnarlyAnnotations(vc);
-                validateGnarlyGenotypes(vc);
-                break;
-            case VQSR:
-                validateRequiredVQSRAnnotations(vc);
-                break;
-            case AS_ANNOTATIONS:
-                validateAlleleSpecificAnnotations(vc);
-        }
+       if(validationsToPerform[ValidationType.REF.ordinal()]) {
+           currentType = ValidationType.REF;
+           vc.validateReferenceBases(reportedRefAllele, observedRefAllele);
+       }
+       if (validationsToPerform[ValidationType.IDS.ordinal()]) {
+           if (!rsIDs.isEmpty()) {
+               currentType = ValidationType.IDS;
+               vc.validateRSIDs(rsIDs);
+           }
+       }
+       if (validationsToPerform[ValidationType.ALLELES.ordinal()]) {
+           currentType = ValidationType.ALLELES;
+           vc.validateAlternateAlleles();
+       }
+       if (validationsToPerform[ValidationType.CHR_COUNTS.ordinal()]) {
+           currentType = ValidationType.CHR_COUNTS;
+           vc.validateChromosomeCounts();
+       }
+       if (validationsToPerform[ValidationType.GNARLY.ordinal()]) {
+           currentType = ValidationType.GNARLY;
+           validateGnarlyAnnotations(vc);
+           validateGnarlyGenotypes(vc);
+       }
+       if (validationsToPerform[ValidationType.VQSR.ordinal()]) {
+           currentType = ValidationType.VQSR;
+           validateRequiredVQSRAnnotations(vc);
+       }
+       if (validationsToPerform[ValidationType.AS_ANNOTATIONS.ordinal()]) {
+           currentType = ValidationType.AS_ANNOTATIONS;
+           validateAlleleSpecificAnnotations(vc);
+       }
     }
 
     private void validateGnarlyAnnotations(final VariantContext vc) {
