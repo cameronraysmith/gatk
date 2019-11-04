@@ -33,6 +33,8 @@ public abstract class LocusWalkerSpark extends GATKSparkTool {
     @Argument(fullName = LocusWalker.MAX_DEPTH_PER_SAMPLE_NAME, shortName = LocusWalker.MAX_DEPTH_PER_SAMPLE_NAME, doc = "Maximum number of reads to retain per sample per locus. Reads above this threshold will be downsampled. Set to 0 to disable.", optional = true)
     protected int maxDepthPerSample = defaultMaxDepthPerSample();
 
+    @Argument(fullName = referencePaddin)
+
     /**
      * Returns default value for the {@link #maxDepthPerSample} parameter, if none is provided on the command line.
      * Default implementation returns 0 (no downsampling by default).
