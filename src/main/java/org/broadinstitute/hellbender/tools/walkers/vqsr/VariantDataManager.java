@@ -7,6 +7,7 @@ import htsjdk.variant.variantcontext.VariantContext;
 import htsjdk.variant.variantcontext.VariantContextBuilder;
 import htsjdk.variant.vcf.VCFConstants;
 import org.apache.commons.lang.ArrayUtils;
+import org.apache.commons.lang3.AnnotationUtils;
 import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.LogManager;
 
@@ -224,6 +225,8 @@ public class VariantDataManager {
         for( final VariantDatum datum : data ) {
             if( datum.atTrainingSite && !datum.failingSTDThreshold ) {
                 trainingData.add( datum );
+            } else if (datum.failingSTDThreshold) {
+                logger.warn("Datum at " + datum.loc + " with ref " + datum.referenceAllele + " and alt " + datum.alternateAllele + " failing std thresholding: " + Arrays.toString(datum.annotations));
             }
         }
         logger.info( "Training with " + trainingData.size() + " variants after standard deviation thresholding." );
