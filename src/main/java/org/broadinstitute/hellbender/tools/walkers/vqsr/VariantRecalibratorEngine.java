@@ -63,9 +63,10 @@ public class VariantRecalibratorEngine {
         for( final VariantDatum datum : data ) {
             final double thisLod = evaluateDatum( datum, model );
             if( Double.isNaN(thisLod) ) {
-                logger.warn("Evaluate datum returned a NaN.");
-                model.failedToConverge = true;
-                return;
+                logger.warn("Evaluate datum returned a NaN -- power through!");
+                //model.failedToConverge = true;
+                datum.lod = Double.NEGATIVE_INFINITY;
+                //return;
             }
 
             datum.lod = ( evaluateContrastively ?
