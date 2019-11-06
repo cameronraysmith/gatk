@@ -355,7 +355,7 @@ public class VariantDataManager {
             if( jitter && (annotationKey.equalsIgnoreCase(GATKVCFConstants.FISHER_STRAND_KEY) || annotationKey.equalsIgnoreCase(GATKVCFConstants.AS_FILTER_STATUS_KEY)) && MathUtils.compareDoubles(value, 0.0, PRECISION) == 0 ) { value += 0.01 * Utils.getRandomGenerator().nextGaussian(); }
             if( jitter && annotationKey.equalsIgnoreCase(GATKVCFConstants.INBREEDING_COEFFICIENT_KEY) && MathUtils.compareDoubles(value, 0.0, PRECISION) == 0 ) { value += 0.01 * Utils.getRandomGenerator().nextGaussian(); }
             if( jitter && (annotationKey.equalsIgnoreCase(GATKVCFConstants.STRAND_ODDS_RATIO_KEY) || annotationKey.equalsIgnoreCase(GATKVCFConstants.AS_STRAND_ODDS_RATIO_KEY)) && MathUtils.compareDoubles(value, LOG_OF_TWO, PRECISION) == 0 ) { value += 0.01 * Utils.getRandomGenerator().nextGaussian(); }   //min SOR is 2.0, then we take ln
-            if( jitter && (annotationKey.equalsIgnoreCase(VCFConstants.RMS_MAPPING_QUALITY_KEY) || annotationKey.equalsIgnoreCase(GATKVCFConstants.AS_RMS_MAPPING_QUALITY_KEY))) {
+            if( jitter && (annotationKey.equalsIgnoreCase(VCFConstants.RMS_MAPPING_QUALITY_KEY))) {
                 if( vrac.MQ_CAP > 0) {
                     value = logitTransform(value, -SAFETY_OFFSET, vrac.MQ_CAP + SAFETY_OFFSET);
                     if (MathUtils.compareDoubles(value, logitTransform(vrac.MQ_CAP, -SAFETY_OFFSET, vrac.MQ_CAP + SAFETY_OFFSET), PRECISION) == 0 ) {
@@ -365,9 +365,11 @@ public class VariantDataManager {
                     value += vrac.MQ_JITTER * Utils.getRandomGenerator().nextGaussian();
                 }
             }
-        } catch( Exception e ) {
-            //TODO: what exception is this handling ? it seems overly broad
-            value = Double.NaN; // The VQSR works with missing data by marginalizing over the missing dimension when evaluating the Gaussian mixture model
+            if( jitter && (annotationKey.equalsIgnoreCase(GATKVCFConstants.AS_RMS_MAPPING_QUALITY_KEY))){
+                value += 0.01 * Utils.getRandomGenerator().nextGaussian();
+            }
+        } catch( NumberFormatException e ) {
+            value = Double.NaN; // VQSR works with missing data by marginalizing over the missing dimension when evaluating the Gaussian mixture model
         }
 
         return value;
