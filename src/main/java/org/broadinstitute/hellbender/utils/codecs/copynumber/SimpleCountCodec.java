@@ -4,18 +4,20 @@ import htsjdk.tribble.AsciiFeatureCodec;
 import htsjdk.tribble.readers.LineIterator;
 import org.broadinstitute.hellbender.exceptions.UserException;
 import org.broadinstitute.hellbender.tools.copynumber.formats.CopyNumberFormatsUtils;
+import org.broadinstitute.hellbender.tools.copynumber.formats.collections.SimpleCountCollection;
 import org.broadinstitute.hellbender.tools.copynumber.formats.records.SimpleCount;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.utils.tsv.TableUtils;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
 
 
 public final class SimpleCountCodec extends AsciiFeatureCodec<SimpleCount> {
 
-    private static final String COLUMN_HEADER_STRING = String.format("CONTIG%1$sSTART%1$sEND%1$sCOUNT", TableUtils.COLUMN_SEPARATOR_STRING);
-    private static final List<String> COLUMN_HEADER = Arrays.asList(COLUMN_HEADER_STRING.split(TableUtils.COLUMN_SEPARATOR_STRING));
+    private static final List<String> COLUMN_HEADER = SimpleCountCollection.SimpleCountTableColumn.COLUMNS.names();
+    private static final String COLUMN_HEADER_STRING = String.join(TableUtils.COLUMN_SEPARATOR_STRING, COLUMN_HEADER);
 
     private boolean havePassedHeader = false;
 
@@ -66,7 +68,7 @@ public final class SimpleCountCodec extends AsciiFeatureCodec<SimpleCount> {
 
     @Override
     public boolean canDecode(final String path) {
-        return path.toLowerCase().endsWith(".counts.tsv");
+        return path.endsWith(".counts.tsv") || path.endsWith(".counts.tsv.gz");
     }
 }
 

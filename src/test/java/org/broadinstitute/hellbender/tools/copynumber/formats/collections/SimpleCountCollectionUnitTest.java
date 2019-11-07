@@ -99,7 +99,7 @@ public final class SimpleCountCollectionUnitTest extends GATKBaseTest {
     @Test
     public void testQuery() {
         LoggingUtils.setLoggingLevel(Log.LogLevel.DEBUG);
-        final String localPath = "/home/slee/working/gatk/test_files/test.counts.tsv";
+        final String localPath = "/home/slee/working/gatk/test_files/test.counts.tsv.gz";
         final String bucketPath = "gs://broad-dsde-methods-slee/test.counts.tsv";
 
         final File file = new File(localPath);

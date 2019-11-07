@@ -1,6 +1,6 @@
 package org.broadinstitute.hellbender.tools.copynumber.formats.collections;
 
-import com.google.common.collect.Lists;
+import com.google.common.collect.ImmutableList;
 import htsjdk.samtools.SAMFileHeader;
 import htsjdk.samtools.SAMTextHeaderCodec;
 import htsjdk.samtools.util.BufferedLineReader;
@@ -13,6 +13,7 @@ import org.broadinstitute.hellbender.tools.copynumber.formats.records.SimpleCoun
 import org.broadinstitute.hellbender.utils.IntervalUtils;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.utils.Utils;
+import org.broadinstitute.hellbender.utils.codecs.copynumber.SimpleCountCodec;
 import org.broadinstitute.hellbender.utils.config.ConfigFactory;
 import org.broadinstitute.hellbender.utils.gcs.BucketUtils;
 import org.broadinstitute.hellbender.utils.io.IOUtils;
@@ -39,14 +40,18 @@ public final class SimpleCountCollection extends AbstractSampleLocatableCollecti
     //note to developers: repeat the column headers in Javadoc so that they are viewable when linked
     /**
      * CONTIG, START, END, COUNT
+     *
+     * Note: Unlike the package-private enums in other collection classes, this enum and its
+     * {@link TableColumnCollection} are public so that they can be accessed by {@link SimpleCountCodec},
+     * which must be in org.broadinstitute.hellbender.utils.codecs to be discovered as a codec.
      */
-    enum SimpleCountTableColumn {
+    public enum SimpleCountTableColumn {
         CONTIG,
         START,
         END,
         COUNT;
 
-        static final TableColumnCollection COLUMNS = new TableColumnCollection((Object[]) values());
+        public static final TableColumnCollection COLUMNS = new TableColumnCollection((Object[]) values());
     }
     
     private static final Function<DataLine, SimpleCount> SIMPLE_COUNT_RECORD_FROM_DATA_LINE_DECODER = dataLine -> {
@@ -144,7 +149,12 @@ public final class SimpleCountCollection extends AbstractSampleLocatableCollecti
                                                    final List<SimpleInterval> intervalSubset) {
         IOUtils.assertFileIsReadable(IOUtils.getPath(path));
         Utils.validate(BucketUtils.isCloudStorageUrl(path), "Read-count path must be a Google Cloud Storage URL.");
-        final SAMTextHeaderCodec samTextHeaderCodec = new SAMTextHeaderCodec();
+        final SampleLocatableMetadata metadata;
+        try (final BufferedLineReader reader = new BufferedLineReader(BucketUtils.openFile(path))) {
+            final SAMTextHeaderCodec samTextHeaderCodec = new SAMTextHeaderCodec();
+            final SAMFileHeader header = samTextHeaderCodec.decode(reader, path);
+            metadata = MetadataUtils.fromHeader(header, Metadata.Type.SAMPLE_LOCATABLE);
+        }
         final FeatureDataSource<SimpleCount> simpleCountsFeatureDataSource = new FeatureDataSource<>(
                 path,
                 path,
@@ -153,10 +163,7 @@ public final class SimpleCountCollection extends AbstractSampleLocatableCollecti
                 ConfigFactory.getInstance().getGATKConfig().cloudPrefetchBuffer(),
                 ConfigFactory.getInstance().getGATKConfig().cloudIndexPrefetchBuffer());
         simpleCountsFeatureDataSource.setIntervalsForTraversal(intervalSubset);
-        final BufferedLineReader reader = new BufferedLineReader(BucketUtils.openFile(path));
-        final SAMFileHeader header = samTextHeaderCodec.decode(reader, path);
-        final SampleLocatableMetadata metadata = MetadataUtils.fromHeader(header, Metadata.Type.SAMPLE_LOCATABLE);
-        final List<SimpleCount> simpleCounts = Lists.newArrayList(simpleCountsFeatureDataSource.iterator());
+        final List<SimpleCount> simpleCounts = ImmutableList.copyOf(simpleCountsFeatureDataSource.iterator());
         return new SimpleCountCollection(metadata, simpleCounts);
     }
 

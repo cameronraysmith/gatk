@@ -142,31 +142,14 @@ public final class CopyNumberArgumentValidationUtils {
             logger.info(String.format("Retrieving intervals from read-count file (%s)...", readCountPath));
         }
 
-        final LocatableMetadata metadata;
-        final List<SimpleInterval> intervals;
-        if (BucketUtils.isCloudStorageUrl(readCountPath)) {
-            final FeatureDataSource<SimpleCount> readCounts = new FeatureDataSource<>(
-                    readCountPath,
-                    readCountPath,
-                    1_000_000,
-                    SimpleCount.class,
-                    ConfigFactory.getInstance().getGATKConfig().cloudPrefetchBuffer(),
-                    ConfigFactory.getInstance().getGATKConfig().cloudIndexPrefetchBuffer());
-            final BufferedLineReader reader = new BufferedLineReader(BucketUtils.openFile(readCountPath));
-            final SAMFileHeader header = new SAMTextHeaderCodec().decode(reader, readCountPath);
-            final SAMSequenceDictionary sequenceDictionary = header.getSequenceDictionary();
-            metadata = new SimpleLocatableMetadata(sequenceDictionary);
-            intervals = intervalArgumentCollection.intervalsSpecified()
-                    ? intervalArgumentCollection.getIntervals(sequenceDictionary)
-                    : Utils.stream(readCounts).map(SimpleCount::getInterval).collect(Collectors.toList());
-        } else {
-            final SimpleCountCollection readCounts = SimpleCountCollection.read(new File(readCountPath));
-            final SAMSequenceDictionary sequenceDictionary = readCounts.getMetadata().getSequenceDictionary();
-            metadata = new SimpleLocatableMetadata(sequenceDictionary);
-            intervals = intervalArgumentCollection.intervalsSpecified()
-                    ? intervalArgumentCollection.getIntervals(sequenceDictionary)
-                    : readCounts.getIntervals();
-        }
+        final SimpleCountCollection readCounts = BucketUtils.isCloudStorageUrl(readCountPath)
+                ? SimpleCountCollection.read(readCountPath)
+                : SimpleCountCollection.read(new File(readCountPath));
+        final SAMSequenceDictionary sequenceDictionary = readCounts.getMetadata().getSequenceDictionary();
+        final LocatableMetadata metadata = new SimpleLocatableMetadata(sequenceDictionary);
+        final List<SimpleInterval> intervals = intervalArgumentCollection.intervalsSpecified()
+                ? intervalArgumentCollection.getIntervals(sequenceDictionary)
+                : readCounts.getIntervals();
 
         return new SimpleIntervalCollection(metadata, intervals);
     }

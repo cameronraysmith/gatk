@@ -180,8 +180,9 @@ public abstract class AbstractRecordCollection<METADATA extends Metadata, RECORD
         }
 
         private SAMFileHeader getHeader() throws IOException {
-            final LineReader lineReader = new BufferedLineReader(Files.newInputStream(path));
-            return new SAMTextHeaderCodec().decode(lineReader, getSource());
+            try (final LineReader lineReader = new BufferedLineReader(Files.newInputStream(path))) {
+                return new SAMTextHeaderCodec().decode(lineReader, getSource());
+            }
         }
 
         @Override
