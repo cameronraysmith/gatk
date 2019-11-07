@@ -8,6 +8,7 @@ import org.broadinstitute.hellbender.exceptions.GATKException;
 import org.broadinstitute.hellbender.exceptions.UserException;
 import org.broadinstitute.hellbender.utils.Utils;
 import org.broadinstitute.hellbender.utils.gcs.BucketUtils;
+import org.broadinstitute.hellbender.utils.io.IOUtils;
 
 import java.io.*;
 import java.util.*;
@@ -157,8 +158,8 @@ public abstract class TableReader<R> implements Closeable, Iterable<R> {
      */
     public TableReader(final Path path) throws IOException {
         this(
-            Utils.nonNull(path, "the input file cannot be null").toString(),
-            new InputStreamReader(BucketUtils.openFile(path.toString())));
+                Utils.nonNull(path, "the input file cannot be null").toString(),
+                IOUtils.makeReaderMaybeGzipped(path));
     }
 
     /**

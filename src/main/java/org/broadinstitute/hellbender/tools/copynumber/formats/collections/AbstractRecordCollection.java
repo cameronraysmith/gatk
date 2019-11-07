@@ -5,7 +5,6 @@ import htsjdk.samtools.SAMFileHeader;
 import htsjdk.samtools.SAMTextHeaderCodec;
 import htsjdk.samtools.util.BufferedLineReader;
 import htsjdk.samtools.util.LineReader;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import org.broadinstitute.hellbender.exceptions.UserException;
 import org.broadinstitute.hellbender.tools.copynumber.formats.CopyNumberFormatsUtils;
@@ -181,7 +180,7 @@ public abstract class AbstractRecordCollection<METADATA extends Metadata, RECORD
         }
 
         private SAMFileHeader getHeader() {
-            try (final LineReader lineReader = new BufferedLineReader(BucketUtils.openFile(path.toString()))) {
+            try (final LineReader lineReader = new BufferedLineReader(BucketUtils.openFile(path.toString()))) { //use BucketUtils.openFile to handle *.gz files
                 return new SAMTextHeaderCodec().decode(lineReader, getSource());
             }
         }
