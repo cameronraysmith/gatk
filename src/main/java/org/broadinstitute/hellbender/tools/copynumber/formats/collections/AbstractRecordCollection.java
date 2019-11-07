@@ -12,6 +12,7 @@ import org.broadinstitute.hellbender.tools.copynumber.formats.CopyNumberFormatsU
 import org.broadinstitute.hellbender.tools.copynumber.formats.metadata.Metadata;
 import org.broadinstitute.hellbender.tools.copynumber.formats.metadata.MetadataUtils;
 import org.broadinstitute.hellbender.utils.Utils;
+import org.broadinstitute.hellbender.utils.gcs.BucketUtils;
 import org.broadinstitute.hellbender.utils.io.IOUtils;
 import org.broadinstitute.hellbender.utils.tsv.*;
 
@@ -179,8 +180,8 @@ public abstract class AbstractRecordCollection<METADATA extends Metadata, RECORD
             return recordFromDataLineDecoder.apply(dataLine);
         }
 
-        private SAMFileHeader getHeader() throws IOException {
-            try (final LineReader lineReader = new BufferedLineReader(Files.newInputStream(path))) {
+        private SAMFileHeader getHeader() {
+            try (final LineReader lineReader = new BufferedLineReader(BucketUtils.openFile(path.toString()))) {
                 return new SAMTextHeaderCodec().decode(lineReader, getSource());
             }
         }
