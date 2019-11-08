@@ -17,6 +17,7 @@ import org.broadinstitute.barclay.argparser.Advanced;
 import org.broadinstitute.barclay.argparser.Argument;
 import org.broadinstitute.barclay.argparser.ArgumentCollection;
 import org.broadinstitute.barclay.argparser.Hidden;
+import org.broadinstitute.hellbender.exceptions.GATKException;
 import picard.cmdline.programgroups.VariantFilteringProgramGroup;
 import org.broadinstitute.hellbender.engine.FeatureContext;
 import org.broadinstitute.hellbender.engine.FeatureInput;
@@ -650,14 +651,20 @@ public class VariantRecalibrator extends MultiVariantWalker {
                     // Generate the positive model using the training data and evaluate each variant
                     goodModel = engine.generateModel(positiveTrainingData, VRAC.MAX_GAUSSIANS);
                     engine.evaluateData(dataManager.getData(), goodModel, false);
+                    if (goodModel.failedToConverge) {
+                        throw new UserException("Positive training model failed to converge.  One or more annotations " +
+                                "(usually MQ) may have insufficient variance.  Please consider lowering the maximum number" +
+                                " of Gaussians allowed for use in the model (via --max-gaussians 4, for example).");
+                    }
                     // Generate the negative model using the worst performing data and evaluate each variant contrastively
                     negativeTrainingData = dataManager.selectWorstVariants();
                     badModel = engine.generateModel(negativeTrainingData,
                             Math.min(VRAC.MAX_GAUSSIANS_FOR_NEGATIVE_MODEL, VRAC.MAX_GAUSSIANS));
-
-                    if (badModel.failedToConverge || goodModel.failedToConverge) {
+                    if (badModel.failedToConverge) {
                         throw new UserException(
-                                "NaN LOD value assigned. Clustering with this few variants and these annotations is unsafe. Please consider " + (badModel.failedToConverge ? "raising the number of variants used to train the negative model (via --minimum-bad-variants 5000, for example)." : "lowering the maximum number of Gaussians allowed for use in the model (via --max-gaussians 4, for example)."));
+                                "NaN LOD value assigned. Clustering with this few variants and these annotations is unsafe." +
+                                        " Please consider raising the number of variants used to train the negative model " +
+                                        "(via --minimum-bad-variants 5000, for example).");
                     }
                 }
 
