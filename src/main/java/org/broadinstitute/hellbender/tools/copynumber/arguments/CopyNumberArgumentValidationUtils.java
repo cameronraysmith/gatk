@@ -1,15 +1,10 @@
 package org.broadinstitute.hellbender.tools.copynumber.arguments;
 
 import com.google.common.collect.Ordering;
-import htsjdk.samtools.SAMFileHeader;
 import htsjdk.samtools.SAMSequenceDictionary;
-import htsjdk.samtools.SAMSequenceRecord;
-import htsjdk.samtools.SAMTextHeaderCodec;
-import htsjdk.samtools.util.BufferedLineReader;
 import htsjdk.samtools.util.Locatable;
 import org.apache.logging.log4j.Logger;
 import org.broadinstitute.hellbender.cmdline.argumentcollections.IntervalArgumentCollection;
-import org.broadinstitute.hellbender.engine.FeatureDataSource;
 import org.broadinstitute.hellbender.exceptions.UserException;
 import org.broadinstitute.hellbender.tools.copynumber.formats.collections.AbstractLocatableCollection;
 import org.broadinstitute.hellbender.tools.copynumber.formats.collections.AnnotatedIntervalCollection;
@@ -18,16 +13,13 @@ import org.broadinstitute.hellbender.tools.copynumber.formats.collections.Simple
 import org.broadinstitute.hellbender.tools.copynumber.formats.metadata.LocatableMetadata;
 import org.broadinstitute.hellbender.tools.copynumber.formats.metadata.SimpleLocatableMetadata;
 import org.broadinstitute.hellbender.tools.copynumber.formats.records.AnnotatedInterval;
-import org.broadinstitute.hellbender.tools.copynumber.formats.records.SimpleCount;
 import org.broadinstitute.hellbender.utils.*;
-import org.broadinstitute.hellbender.utils.config.ConfigFactory;
 import org.broadinstitute.hellbender.utils.gcs.BucketUtils;
 import org.broadinstitute.hellbender.utils.io.IOUtils;
 import org.broadinstitute.hellbender.utils.python.PythonScriptExecutor;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.Path;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -143,7 +135,7 @@ public final class CopyNumberArgumentValidationUtils {
         }
 
         final SimpleCountCollection readCounts = BucketUtils.isCloudStorageUrl(readCountPath)
-                ? SimpleCountCollection.read(readCountPath)
+                ? SimpleCountCollection.readFromGCS(readCountPath)
                 : SimpleCountCollection.read(new File(readCountPath));
         final SAMSequenceDictionary sequenceDictionary = readCounts.getMetadata().getSequenceDictionary();
         final LocatableMetadata metadata = new SimpleLocatableMetadata(sequenceDictionary);

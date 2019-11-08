@@ -1,41 +1,41 @@
 package org.broadinstitute.hellbender.tools.copynumber.formats.collections;
 
-import com.google.common.collect.Lists;
-import htsjdk.samtools.SAMFileHeader;
+import com.google.common.collect.ImmutableList;
 import htsjdk.samtools.SAMSequenceDictionary;
 import htsjdk.samtools.SAMSequenceRecord;
-import htsjdk.samtools.SAMTextHeaderCodec;
-import htsjdk.samtools.util.BufferedLineReader;
-import htsjdk.samtools.util.Log;
-import org.apache.commons.math3.linear.Array2DRowRealMatrix;
-import org.apache.commons.math3.linear.RealMatrix;
 import org.broadinstitute.hellbender.GATKBaseTest;
-import org.broadinstitute.hellbender.engine.FeatureDataSource;
 import org.broadinstitute.hellbender.exceptions.UserException;
 import org.broadinstitute.hellbender.tools.copynumber.formats.metadata.SampleLocatableMetadata;
 import org.broadinstitute.hellbender.tools.copynumber.formats.metadata.SimpleSampleLocatableMetadata;
 import org.broadinstitute.hellbender.tools.copynumber.formats.records.SimpleCount;
-import org.broadinstitute.hellbender.utils.LoggingUtils;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
-import org.broadinstitute.hellbender.utils.gcs.BucketUtils;
 import org.testng.Assert;
+import org.testng.annotations.DataProvider;
 import org.testng.annotations.Test;
 
 import java.io.File;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 
 public final class SimpleCountCollectionUnitTest extends GATKBaseTest {
     private static final File TEST_SUB_DIR = new File(toolsTestDir, "copynumber/formats/collections");
-    private static final File INTEGER_COUNTS_FILE = new File(TEST_SUB_DIR,"simple-count-collection-integer-counts.tsv");
+
+    private static final File INTEGER_COUNTS_TSV_FILE = new File(TEST_SUB_DIR,"simple-count-collection-integer-counts.tsv");
     private static final File INTEGER_COUNTS_HDF5_FILE = new File(TEST_SUB_DIR,"simple-count-collection-integer-counts.hdf5");
-    private static final File INTEGER_COUNTS_MISSING_HEADER_FILE = new File(TEST_SUB_DIR,"simple-count-collection-integer-counts-missing-header.tsv");
-    private static final File DOUBLE_COUNTS_FILE = new File(TEST_SUB_DIR, "simple-count-collection-double-counts.tsv");
+    private static final File INTEGER_COUNTS_TSV_GZ_FILE = new File(TEST_SUB_DIR,"simple-count-collection-integer-counts.tsv.gz");
+
+    private static final String GCS_COLLECTIONS_TEST_SUBDIRECTORY = getGCPTestInputPath() +
+            "org/broadinstitute/hellbender/tools/copynumber/formats/collections/";
+    private static final String GCS_INTEGER_COUNTS_TSV_PATH = GCS_COLLECTIONS_TEST_SUBDIRECTORY +
+            "simple-count-collection-integer-counts.counts.tsv";
+    private static final String GCS_INTEGER_COUNTS_TSV_GZ_PATH = GCS_COLLECTIONS_TEST_SUBDIRECTORY +
+            "simple-count-collection-integer-counts.counts.tsv.gz";
+
+    private static final File INTEGER_COUNTS_MISSING_HEADER_TSV_FILE = new File(TEST_SUB_DIR,"simple-count-collection-integer-counts-missing-header.tsv");
+    private static final File DOUBLE_COUNTS_TSV_FILE = new File(TEST_SUB_DIR, "simple-count-collection-double-counts.tsv");
 
     private static final SampleLocatableMetadata METADATA_EXPECTED = new SimpleSampleLocatableMetadata(
             "test-sample",
@@ -59,70 +59,82 @@ public final class SimpleCountCollectionUnitTest extends GATKBaseTest {
             new SimpleInterval("20", 130001, 140000),
             new SimpleInterval("20", 140001, 150000),
             new SimpleInterval("20", 150001, 160000));
-    private static final RealMatrix READ_COUNTS_EXPECTED = new Array2DRowRealMatrix(
-            new double[][]{{0, 0, 0, 0, 0, 0, 94, 210, 22, 21, 24, 84, 247, 181, 27, 72}});
+    private static final List<Integer> READ_COUNTS_EXPECTED =
+            ImmutableList.of(0, 0, 0, 0, 0, 0, 94, 210, 22, 21, 24, 84, 247, 181, 27, 72);
 
-    @Test
-    public void testReadIntegerCounts() {
-        final SimpleCountCollection scc = SimpleCountCollection.read(INTEGER_COUNTS_FILE);
-        final SampleLocatableMetadata metadata = scc.getMetadata();
-        final List<SimpleInterval> intervals = scc.getIntervals();
-        final RealMatrix readCounts = new Array2DRowRealMatrix(new double[][]{scc.getRecords().stream().mapToDouble(SimpleCount::getCount).toArray()});
-
-        Assert.assertEquals(metadata, METADATA_EXPECTED);
-        Assert.assertEquals(intervals, INTERVALS_EXPECTED);
-        Assert.assertEquals(readCounts, READ_COUNTS_EXPECTED);
+    @DataProvider(name = "simpleCountCollectionReadIntegerCountsTestData")
+    public Object[] getSimpleCountCollectionReadTestData() {
+        return new Object[] {
+                INTEGER_COUNTS_TSV_FILE,
+                INTEGER_COUNTS_HDF5_FILE,
+                INTEGER_COUNTS_TSV_GZ_FILE
+        };
     }
 
-    @Test
-    public void testReadIntegerCountsHDF5() {
-        final SimpleCountCollection scc = SimpleCountCollection.read(INTEGER_COUNTS_HDF5_FILE);
-        final SampleLocatableMetadata metadata = scc.getMetadata();
-        final List<SimpleInterval> intervals = scc.getIntervals();
-        final RealMatrix readCounts = new Array2DRowRealMatrix(new double[][]{scc.getRecords().stream().mapToDouble(SimpleCount::getCount).toArray()});
+    @Test(dataProvider = "simpleCountCollectionReadIntegerCountsTestData")
+    public void testReadIntegerCounts(final File file) {
+        final SimpleCountCollection scc = SimpleCountCollection.read(file);
 
-        Assert.assertEquals(metadata, METADATA_EXPECTED);
-        Assert.assertEquals(intervals, INTERVALS_EXPECTED);
-        Assert.assertEquals(readCounts, READ_COUNTS_EXPECTED);
+        Assert.assertEquals(scc.getMetadata(), METADATA_EXPECTED);
+        Assert.assertEquals(scc.getIntervals(), INTERVALS_EXPECTED);
+        Assert.assertEquals(scc.getRecords().stream().map(SimpleCount::getCount).collect(Collectors.toList()), READ_COUNTS_EXPECTED);
     }
 
     @Test(expectedExceptions = IllegalArgumentException.class)
     public void testReadIntegerCountsMissingHeader() {
-        SimpleCountCollection.read(INTEGER_COUNTS_MISSING_HEADER_FILE);
+        SimpleCountCollection.read(INTEGER_COUNTS_MISSING_HEADER_TSV_FILE);
     }
 
     @Test(expectedExceptions = UserException.BadInput.class)
     public void testReadDoubleCounts() {
-        SimpleCountCollection.read(DOUBLE_COUNTS_FILE);
+        SimpleCountCollection.read(DOUBLE_COUNTS_TSV_FILE);
     }
 
-    @Test
-    public void testQuery() {
-        LoggingUtils.setLoggingLevel(Log.LogLevel.DEBUG);
-        final String localPath = "/home/slee/working/gatk/test_files/test.counts.tsv.gz";
-        final String bucketPath = "gs://broad-dsde-methods-slee/test.counts.tsv";
-
-        final File file = new File(localPath);
-        final FeatureDataSource<SimpleCount> localSource = new FeatureDataSource<>(localPath);
-        final FeatureDataSource<SimpleCount> bucketSource = new FeatureDataSource<>(bucketPath);
-
-        final SimpleInterval interval = new SimpleInterval("1", 1, 500000);
-
-        final SimpleCountCollection counts = SimpleCountCollection.read(file);
-
-        final BufferedLineReader localReader = new BufferedLineReader(BucketUtils.openFile(localPath));
-        final SAMFileHeader localHeader = new SAMTextHeaderCodec().decode(localReader, localPath);
-
-        final BufferedLineReader bucketReader = new BufferedLineReader(BucketUtils.openFile(bucketPath));
-        final SAMFileHeader bucketHeader = new SAMTextHeaderCodec().decode(bucketReader, bucketPath);
-
-        System.out.println(Stream.of(counts.getMetadata().toHeader().getSAMString(), localHeader.getSAMString(), bucketHeader.getSAMString()).distinct().count() == 1);
-
-        System.out.println(localSource.getHeader().toString());
-        System.out.println(bucketSource.getHeader().toString());
-
-        System.out.println(counts.getOverlapDetector().getOverlaps(interval).stream().sorted(counts.getComparator()).collect(Collectors.toList()));
-        System.out.println(Lists.newArrayList(localSource.query(interval)));
-        System.out.println(Lists.newArrayList(bucketSource.query(interval)));
+    @DataProvider(name = "simpleCountCollectionReadFromGCSIntegerCountsTestData")
+    public Object[] getSimpleCountCollectionReadFromGCSIntegerCountsTestData() {
+        return new Object[] {
+                GCS_INTEGER_COUNTS_TSV_PATH,
+                GCS_INTEGER_COUNTS_TSV_GZ_PATH
+        };
     }
+
+    @Test(dataProvider = "simpleCountCollectionReadFromGCSIntegerCountsTestData", groups = "bucket")
+    public void testReadFromGCSIntegerCounts(final String path) {
+        final SimpleCountCollection scc = SimpleCountCollection.readFromGCS(path);
+
+        Assert.assertEquals(scc.getMetadata(), METADATA_EXPECTED);
+        Assert.assertEquals(scc.getIntervals(), INTERVALS_EXPECTED);
+        Assert.assertEquals(scc.getRecords().stream().map(SimpleCount::getCount).collect(Collectors.toList()), READ_COUNTS_EXPECTED);
+    }
+
+    //TODO: add tests for readSubset and readOverlappingSubsetFromGCS
+//    @Test
+//    public void testQuery() {
+//        LoggingUtils.setLoggingLevel(Log.LogLevel.DEBUG);
+//        final String localPath = "/home/slee/working/gatk/test_files/test.counts.tsv.gz";
+//        final String bucketPath = "gs://broad-dsde-methods-slee/test.counts.tsv";
+//
+//        final File file = new File(localPath);
+//        final FeatureDataSource<SimpleCount> localSource = new FeatureDataSource<>(localPath);
+//        final FeatureDataSource<SimpleCount> bucketSource = new FeatureDataSource<>(bucketPath);
+//
+//        final SimpleInterval interval = new SimpleInterval("1", 1, 500000);
+//
+//        final SimpleCountCollection counts = SimpleCountCollection.read(file);
+//
+//        final BufferedLineReader localReader = new BufferedLineReader(BucketUtils.openFile(localPath));
+//        final SAMFileHeader localHeader = new SAMTextHeaderCodec().decode(localReader, localPath);
+//
+//        final BufferedLineReader bucketReader = new BufferedLineReader(BucketUtils.openFile(bucketPath));
+//        final SAMFileHeader bucketHeader = new SAMTextHeaderCodec().decode(bucketReader, bucketPath);
+//
+//        System.out.println(Stream.of(counts.getMetadata().toHeader().getSAMString(), localHeader.getSAMString(), bucketHeader.getSAMString()).distinct().count() == 1);
+//
+//        System.out.println(localSource.getHeader().toString());
+//        System.out.println(bucketSource.getHeader().toString());
+//
+//        System.out.println(counts.getOverlapDetector().getOverlaps(interval).stream().sorted(counts.getComparator()).collect(Collectors.toList()));
+//        System.out.println(Lists.newArrayList(localSource.query(interval)));
+//        System.out.println(Lists.newArrayList(bucketSource.query(interval)));
+//    }
 }

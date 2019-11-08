@@ -218,9 +218,14 @@ public final class DetermineGermlineContigPloidy extends CommandLineProgram {
     public static final String CONTIG_PLOIDY_PRIORS_FILE_LONG_NAME = "contig-ploidy-priors";
 
     @Argument(
-            doc = "Input read-count files containing integer read counts in genomic intervals for all samples.  " +
-                    "Intervals must be identical and in the same order for all samples.  " +
-                    "If only a single sample is specified, an input ploidy-model directory must also be specified.  ",
+            doc = "Input paths for read-count files containing integer read counts in genomic intervals for all samples.  " +
+                    "All intervals specified via -L/-XL must be contained; " +
+                    "if none are specified, then intervals must be identical and in the same order for all samples.  " +
+                    "If read-count files are given by Google Cloud Storage paths, " +
+                    "have the extension .counts.tsv or .counts.tsv.gz, " +
+                    "and have been indexed (by IndexFeatureFile or tabix, respectively), " +
+                    "only the specified intervals will be queried and streamed; " +
+                    "this can reduce disk usage by avoiding the complete localization of all read-count files.",
             fullName = StandardArgumentDefinitions.INPUT_LONG_NAME,
             shortName = StandardArgumentDefinitions.INPUT_SHORT_NAME,
             minElements = 1

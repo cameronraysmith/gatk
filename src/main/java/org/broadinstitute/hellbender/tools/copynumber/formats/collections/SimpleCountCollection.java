@@ -89,7 +89,7 @@ public final class SimpleCountCollection extends AbstractSampleLocatableCollecti
     /**
      * From a file (HDF5 or TSV), subset only the counts with intervals coinciding with intervals from a given list.
      * The list may contain intervals that do not coincide with any count intervals.
-     * Unlike {@link #readSubset(String, List)}, this method first reads and constructs a {@link SimpleCountCollection}
+     * Unlike {@link #readOverlappingSubsetFromGCS(String, List)}, this method first reads and constructs a {@link SimpleCountCollection}
      * using the entire file, and then creates and returns a second {@link SimpleCountCollection} containing only the
      * requested subset.  This method also does not subset count intervals that overlap but do not strictly coincide
      * with intervals in the given list.
@@ -131,10 +131,10 @@ public final class SimpleCountCollection extends AbstractSampleLocatableCollecti
     /**
      * Read all counts from a Google Cloud Storage URL.
      */
-    public static SimpleCountCollection read(final String path) {
+    public static SimpleCountCollection readFromGCS(final String path) {
         IOUtils.assertFileIsReadable(IOUtils.getPath(path));
         Utils.validate(BucketUtils.isCloudStorageUrl(path), "Read-count path must be a Google Cloud Storage URL.");
-        return readSubset(path, null);  //specifying a null intervalSubset returns all counts
+        return readOverlappingSubsetFromGCS(path, null);  //specifying a null intervalSubset returns all counts
     }
 
     /**
@@ -143,10 +143,10 @@ public final class SimpleCountCollection extends AbstractSampleLocatableCollecti
      * Unlike {@link #readSubset(File, Set)}, this method checks for overlaps, rather than requiring the intervals
      * to be strictly coincident.  Calling code can use {@link IntervalUtils#getIntervalsWithFlanks} to create a merged
      * list of the original intervals desired to be strictly coincident; this merged list can then be used with this method.
-     * @param intervalSubset    if {@code null} or empty, all counts will be returned
+     * @param overlapIntervals    if {@code null} or empty, all counts will be returned
      */
-    public static SimpleCountCollection readSubset(final String path,
-                                                   final List<SimpleInterval> intervalSubset) {
+    public static SimpleCountCollection readOverlappingSubsetFromGCS(final String path,
+                                                                     final List<SimpleInterval> overlapIntervals) {
         IOUtils.assertFileIsReadable(IOUtils.getPath(path));
         Utils.validate(BucketUtils.isCloudStorageUrl(path), "Read-count path must be a Google Cloud Storage URL.");
         final SampleLocatableMetadata metadata;
@@ -162,7 +162,7 @@ public final class SimpleCountCollection extends AbstractSampleLocatableCollecti
                 SimpleCount.class,
                 ConfigFactory.getInstance().getGATKConfig().cloudPrefetchBuffer(),
                 ConfigFactory.getInstance().getGATKConfig().cloudIndexPrefetchBuffer());
-        simpleCountsFeatureDataSource.setIntervalsForTraversal(intervalSubset);
+        simpleCountsFeatureDataSource.setIntervalsForTraversal(overlapIntervals);
         final List<SimpleCount> simpleCounts = ImmutableList.copyOf(simpleCountsFeatureDataSource.iterator());
         return new SimpleCountCollection(metadata, simpleCounts);
     }
